@@ -241,8 +241,6 @@ object MIDIControllerPlayerPortClient : ClientModInitializer {
 	override fun onInitializeClient() {
 		// This entrypoint is suitable for setting up client-specific logic, such as rendering.
 
-		tryCreateConfigFile()
-
 		ClientCommandRegistrationCallback.EVENT.register({ dispatcher, registry ->
 			dispatcher.register(
 				ClientCommandManager.literal("midi")
@@ -301,8 +299,8 @@ object MIDIControllerPlayerPortClient : ClientModInitializer {
 								})))
 					.then(ClientCommandManager.literal("debug")
 						.executes { context ->
-							showDebugMessages = !showDebugMessages
-							chatMessage("[MIDI] showDebugMessages=$showDebugMessages")
+							tryCreateConfigFile()
+							chatMessage("[MIDI] uhm now it shouldve downloaded some cool files ig")
 							1
 						})
 			)
