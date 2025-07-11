@@ -267,22 +267,20 @@ object MIDIControllerPlayerPortClient : ClientModInitializer {
 					.then(ClientCommandManager.literal("reloadConfig")
 						.then(ClientCommandManager.argument("file", StringArgumentType.string())
 							.suggests { context, builder ->
-								if (configDirectory.isDirectory) {
-									Files.list(configDirectory.toPath())
-										.filter { f -> !f.isDirectory() }
+								val profileDir = configDirectory.resolve("profiles")
+								if (profileDir.isDirectory) {
+									Files.list(profileDir.toPath())
+										.filter { f -> !Files.isDirectory(f) }
 										.forEach { f ->
-											if (f.name.contains(' ')) {
-												builder.suggest("\"${f.name}\"")
-											} else {
-												builder.suggest(f.name)
-											}
+											val name = f.fileName.toString()
+											builder.suggest(if (name.contains(' ')) "\"$name\"" else name)
 										}
 								}
 								builder.buildFuture()
 							}
 							.executes { context ->
 								val fName = StringArgumentType.getString(context, "file")
-								reloadConfigMap(fName, false)
+								reloadConfigMap(fName, false, true)
 								1
 							}
 							.then(ClientCommandManager.literal("append")
@@ -300,7 +298,7 @@ object MIDIControllerPlayerPortClient : ClientModInitializer {
 					.then(ClientCommandManager.literal("debug")
 						.executes { context ->
 							tryCreateConfigFile()
-							chatMessage("[MIDI] uhm now it shouldve downloaded some cool files ig")
+							chatMessage("[MIDI] uhm now it should've downloaded some cool files ig")
 							1
 						})
 			)
@@ -428,11 +426,17 @@ object MIDIControllerPlayerPortClient : ClientModInitializer {
 			}
 		}
 
-		val fileDir = File(configDirectory, "profiles")
-		val file = File(fileDir, fName)
+		// Explicitly resolve the proper directory
+		val profileDir = File(configDirectory, "profiles")
+		val file = File(profileDir, fName)
 
+		// Print the actual path being checked
+		chatMessage("§7Looking for file at: ${file.absolutePath}")
+
+		// Check existence
 		if (!file.exists()) {
-			chatMessage("§c[MIDI] Profile '$fName' not found in /config/profiles")
+			chatMessage("§c[MIDI] Profile '$fName' not found in ${profileDir.absolutePath}")
+			chatMessage("§c[MIDI] Try running: §f/midi debug §cand then load with secret flag")
 			return
 		}
 
@@ -471,4 +475,5 @@ object MIDIControllerPlayerPortClient : ClientModInitializer {
 			chatMessage("§c${e.message}")
 		}
 	}
+
 }
