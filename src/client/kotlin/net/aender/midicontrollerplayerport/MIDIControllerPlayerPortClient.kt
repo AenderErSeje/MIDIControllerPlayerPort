@@ -18,7 +18,9 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileReader
 import java.io.FileWriter
+import java.net.URL
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import javax.sound.midi.*
 import kotlin.io.path.isDirectory
 import kotlin.io.path.name
@@ -377,18 +379,45 @@ object MIDIControllerPlayerPortClient : ClientModInitializer {
 
 	private fun tryCreateConfigFile() {
 		configDirectory.mkdirs()
-		val proFile = File(configDirectory, "default.profile")
-		if (!proFile.isFile) {
-			logger.info("Attempting to create the default profile")
-			try {
-				val writer = FileWriter(proFile)
-				writer.close()
-			} catch (e: Exception) {}
+
+		val profilesDir = File(configDirectory, "profiles")
+		val schematicsDir = File(configDirectory, "schematics")
+
+		downloadFile(
+			"https://raw.githubusercontent.com/AenderErSeje/MIDIControllerPlayerPort/main/src/main/resources/config/profiles/Test1.txt",
+			File(profilesDir, "Test1.txt")
+		)
+
+		downloadFile(
+			"https://raw.githubusercontent.com/AenderErSeje/MIDIControllerPlayerPort/main/src/main/resources/config/profiles/TestSecret.txt",
+			File(profilesDir, "TestSecret.txt")
+		)
+
+		// Download schematic file
+		downloadFile(
+			"https://raw.githubusercontent.com/AenderErSeje/MIDIControllerPlayerPort/main/src/main/resources/config/schematics/midipiano.schem",
+			File(schematicsDir, "midipiano.schem")
+		)
+	}
+
+	private fun downloadFile(remoteUrl: String, targetFile: File) {
+		try {
+			targetFile.parentFile.mkdirs()
+			URL(remoteUrl).openStream().use { input ->
+				Files.copy(input, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+			}
+			logger.info("Downloaded $remoteUrl to ${targetFile.absolutePath}")
+			chatMessage("§a[MIDI] Downloaded ${targetFile.name}")
+		} catch (e: Exception) {
+			logger.error("Failed to download $remoteUrl: ${e.message}")
+			chatMessage("§c[MIDI] Failed to download ${targetFile.name}: ${e.message}")
 		}
 	}
 
+
 	private fun reloadConfigMap(fName: String, append: Boolean, secret: Boolean = false) {
 		chatMessage("§b[MIDI] Reloading key mappings")
+
 		if (secret) {
 			secretSettingMap.clear()
 			if (fName.isEmpty()) {
@@ -400,13 +429,21 @@ object MIDIControllerPlayerPortClient : ClientModInitializer {
 				secretSettingEnabled = true
 			}
 		}
-		val file = File(configDirectory, fName)
-		val reader = FileReader(file)
+
+		val fileDir = File(configDirectory, "profiles")
+		val file = File(fileDir, fName)
+
+		if (!file.exists()) {
+			chatMessage("§c[MIDI] Profile '$fName' not found in /config/profiles")
+			return
+		}
+
 		if (!append && !secret) {
 			mappedKeys.clear()
 		}
+
 		try {
-			reader.forEachLine { line ->
+			file.forEachLine { line ->
 				val s = line.split(':')
 				if (s[0] == "vel") {
 					velocityThreshold = s[1].toInt()
@@ -424,15 +461,16 @@ object MIDIControllerPlayerPortClient : ClientModInitializer {
 					return@forEachLine
 				}
 
+				val posAction = PosAction(Vec3i(x, y, z), action)
 				if (secret) {
-					secretSettingMap[key] = PosAction(Vec3i(x, y, z), action)
+					secretSettingMap[key] = posAction
 				} else {
-					mappedKeys[key] = PosAction(Vec3i(x, y, z), action)
+					mappedKeys[key] = posAction
 				}
 			}
 		} catch (e: Exception) {
-			chatMessage("§cAn error has occurred")
-			chatMessage(e.message ?: "")
+			chatMessage("§cAn error occurred while loading the profile")
+			chatMessage("§c${e.message}")
 		}
 	}
 }
